@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Water Tank Cloud Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b1325;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --water-color: #00d2ff;
+      --text: #ffffff;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 5px;
+      color: #00e5ff;
+    }
+
+    .status-badge {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      margin-bottom: 25px;
+      background: #00e676;
+      color: #000;
+      font-weight: bold;
+    }
+
+    .dashboard {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 30px;
+      justify-content: center;
+      max-width: 900px;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      flex: 1;
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .tank-container {
+      position: relative;
+      width: 140px;
+      height: 220px;
+      border: 4px solid #fff;
+      border-top: none;
+      border-radius: 0 0 20px 20px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+      margin-top: 15px;
+    }
+
+    .water {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 0%;
+      background: var(--water-color);
+      transition: height 1.5s ease-in-out, background-color 0.8s ease;
+      box-shadow: 0 0 20px var(--water-color);
+    }
+
+    .water::before {
+      content: "";
+      position: absolute;
+      width: 200%;
+      height: 20px;
+      top: -10px;
+      left: -50%;
+      background: rgba(255, 255, 255, 0.4);
+      border-radius: 40%;
+      animation: wave 4s infinite linear;
+    }
+
+    @keyframes wave {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .value-display {
+      font-size: 42px;
+      font-weight: bold;
+      margin: 15px 0 5px 0;
+    }
+
+    .label {
+      font-size: 14px;
+      color: #a0aec0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .polluted {
+      --water-color: #ff3366 !important;
+    }
+
+    .clean {
+      --water-color: #00d2ff !important;
+    }
+
+    .warning-box {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      width: 100%;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .alert-active {
+      background: #ff3366;
+      color: #fff;
+    }
+
+    .alert-normal {
+      background: rgba(0, 230, 118, 0.2);
+      color: #00e676;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>AquaSense Cloud Dashboard</h1>
+  <div class="status-badge" id="status">Connecting to Cloud...</div>
+
+  <div class="dashboard">
+    <div class="card">
+      <div class="label">Water Level</div>
+      <div class="value-display" id="levelVal">--%</div>
+      <div class="tank-container">
+        <div class="water clean" id="waterBody"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">TDS Water Quality</div>
+      <div class="value-display" id="tdsVal">-- ppm</div>
+      <div id="qualityStatus" style="margin-bottom: 20px;">Checking quality...</div>
+
+      <div class="label">Sensor Distance</div>
+      <div class="value-display" id="distVal">-- cm</div>
+
+      <div class="warning-box alert-normal" id="lossBox">No Leak Detected</div>
+    </div>
+  </div>
+
+  <script>
+    const channelID = "3513049";
+    const readAPIKey = "5X9AZHLQMI65738Y";
+
+    async function fetchCloudData() {
+      try {
+        const response = await fetch(`https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1`);
+        const data = await response.json();
+        const lastEntry = data.feeds[0];
+
+        if (lastEntry) {
+          const level = parseFloat(lastEntry.field1) || 0;
+          const tds = parseFloat(lastEntry.field2) || 0;
+          const distance = parseFloat(lastEntry.field3) || 0;
+          const loss = parseInt(lastEntry.field4) || 0;
+
+          document.getElementById('levelVal').innerText = Math.round(level) + '%';
+          document.getElementById('tdsVal').innerText = Math.round(tds) + ' ppm';
+          document.getElementById('distVal').innerText = distance.toFixed(1) + ' cm';
+          document.getElementById('waterBody').style.height = level + '%';
+          document.getElementById('status').innerText = 'Cloud Connected';
+
+          const waterBody = document.getElementById('waterBody');
+          const qualityStatus = document.getElementById('qualityStatus');
+
+          if (tds > 500) {
+            waterBody.classList.remove('clean');
+            waterBody.classList.add('polluted');
+            qualityStatus.innerText = '⚠️ Water Polluted!';
+            qualityStatus.style.color = '#ff3366';
+          } else {
+            waterBody.classList.remove('polluted');
+            waterBody.classList.add('clean');
+            qualityStatus.innerText = '✓ Good Quality';
+            qualityStatus.style.color = '#00e676';
+          }
+
+          const lossBox = document.getElementById('lossBox');
+          if (loss === 1) {
+            lossBox.innerText = '⚠️ Abnormal Water Loss Detected!';
+            lossBox.className = 'warning-box alert-active';
+          } else {
+            lossBox.innerText = '✓ System Normal';
+            lossBox.className = 'warning-box alert-normal';
+          }
+        }
+      } catch (err) {
+        document.getElementById('status').innerText = 'Cloud Offline / Fetch Error';
+      }
+    }
+
+    setInterval(fetchCloudData, 5000);
+    fetchCloudData();
+  </script>
+</body>
+</html>
